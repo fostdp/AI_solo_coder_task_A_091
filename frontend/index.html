@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古代坎儿井暗渠水力仿真与水量分配系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header class="app-header">
+            <h1>🏜️ 古代坎儿井暗渠水力仿真与水量分配系统</h1>
+            <div class="header-info">
+                <span id="currentKarez">吐鲁番坎儿井-木纳尔</span>
+                <span class="divider">|</span>
+                <span id="currentTime">--</span>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <aside class="sidebar">
+                <div class="panel">
+                    <h3>📊 实时数据</h3>
+                    <div class="stat-grid">
+                        <div class="stat-item">
+                            <div class="stat-value" id="totalFlow">--</div>
+                            <div class="stat-label">总流量 (m³/s)</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="totalDemand">--</div>
+                            <div class="stat-label">总需求 (m³/s)</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="supplyRatio">--</div>
+                            <div class="stat-label">供水满足率 (%)</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="alertCount">--</div>
+                            <div class="stat-label">活动告警</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>🚨 告警信息</h3>
+                    <div id="alertList" class="alert-list">
+                        <div class="empty-state">暂无告警</div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>💧 水量分配</h3>
+                    <div id="allocationList" class="allocation-list">
+                        <div class="empty-state">加载中...</div>
+                    </div>
+                    <button class="btn btn-primary" onclick="runOptimization()">运行优化分配</button>
+                </div>
+
+                <div class="panel">
+                    <h3>⚙️ 仿真控制</h3>
+                    <div class="control-group">
+                        <label>仿真速度</label>
+                        <input type="range" id="simSpeed" min="0.1" max="3" step="0.1" value="1" onchange="updateSimSpeed(this.value)">
+                        <span id="simSpeedValue">1.0x</span>
+                    </div>
+                    <div class="control-group">
+                        <label>显示粒子</label>
+                        <input type="checkbox" id="showParticles" checked onchange="toggleParticles(this.checked)">
+                    </div>
+                    <div class="control-group">
+                        <label>显示竖井</label>
+                        <input type="checkbox" id="showShafts" checked onchange="toggleShafts(this.checked)">
+                    </div>
+                    <button class="btn btn-secondary" onclick="runHydraulicSim()">运行水力仿真</button>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div class="panel canvas-panel">
+                    <div class="panel-header">
+                        <h3>🎢 坎儿井三维剖面</h3>
+                        <div class="view-controls">
+                            <button class="btn-icon" onclick="setView('front')" title="正视图">📐</button>
+                            <button class="btn-icon" onclick="setView('side')" title="侧视图">📏</button>
+                            <button class="btn-icon" onclick="setView('top')" title="俯视图">⬆️</button>
+                            <button class="btn-icon" onclick="setView('3d')" title="3D视图">🎯</button>
+                            <button class="btn-icon" onclick="resetCamera()" title="重置视角">🔄</button>
+                        </div>
+                    </div>
+                    <div id="canvas-container" class="canvas-container">
+                        <canvas id="karez-canvas"></canvas>
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: rgba(100, 180, 255, 0.4); border: 2px solid #4a90d9;"></span>
+                            <span>暗渠（透明管道）</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #64b5f6;"></span>
+                            <span>水流粒子</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #8d6e63;"></span>
+                            <span>竖井筒</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color" style="background: #a1887f;"></span>
+                            <span>地层</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>📈 暗渠段详情</h3>
+                    <div id="segmentDetails" class="segment-details">
+                        <div class="empty-state">选择暗渠段查看详情</div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="js/karez3d.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
