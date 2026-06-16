@@ -1,11 +1,12 @@
 package handlers
 
 import (
-	"karez-system/alert"
+	"karez-system/alarm_mqtt"
 	"karez-system/db"
+	dtureceiver "karez-system/dtu_receiver"
+	hydraulicsim "karez-system/hydraulic_sim"
 	"karez-system/models"
-	"karez-system/optimization"
-	"karez-system/simulation"
+	wateralloc "karez-system/water_allocator"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,19 +15,24 @@ import (
 )
 
 type Handler struct {
-	database   *db.Database
-	simulator  *simulation.HydraulicSimulator
-	allocator  *optimization.WaterAllocator
-	alertMgr   *alert.AlertManager
+	database       *db.Database
+	dtuReceiver    *dtureceiver.DtuReceiver
+	hydraulicSim   *hydraulicsim.HydraulicSimulator
+	waterAllocator *wateralloc.WaterAllocator
+	alarmManager   *alarmmqtt.AlarmManager
 }
 
-func New(database *db.Database, simulator *simulation.HydraulicSimulator,
-	allocator *optimization.WaterAllocator, alertMgr *alert.AlertManager) *Handler {
+func New(database *db.Database,
+	dtuReceiver *dtureceiver.DtuReceiver,
+	hydraulicSim *hydraulicsim.HydraulicSimulator,
+	waterAllocator *wateralloc.WaterAllocator,
+	alarmManager *alarmmqtt.AlarmManager) *Handler {
 	return &Handler{
-		database:  database,
-		simulator: simulator,
-		allocator: allocator,
-		alertMgr:  alertMgr,
+		database:       database,
+		dtuReceiver:    dtuReceiver,
+		hydraulicSim:   hydraulicSim,
+		waterAllocator: waterAllocator,
+		alarmManager:   alarmManager,
 	}
 }
 
@@ -68,8 +74,8 @@ func (h *Handler) PostSensorData(c *gin.Context) {
 		Velocity:        req.Velocity,
 	}
 
-	if err := h.database.InsertSensorData(c.Request.Context(), data); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert sensor data"})
+	if err := h.dtuReceiver.ReceiveHTTP(data); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -201,7 +207,7 @@ func (h *Handler) RunSimulation(c *gin.Context) {
 		return
 	}
 
-	if err := h.simulator.RunFullSimulation(c.Request.Context(), req.KarezID); err != nil {
+	if err := h.hydraulicSim.RunFullSimulation(c.Request.Context(), req.KarezID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -210,7 +216,7 @@ func (h *Handler) RunSimulation(c *gin.Context) {
 }
 
 type AllocateRequest struct {
-	KarezID           int     `json:"karez_id" binding:"required"`
+	KarezID            int     `json:"karez_id" binding:"required"`
 	TotalAvailableFlow float64 `json:"total_available_flow" binding:"required"`
 }
 
@@ -221,7 +227,7 @@ func (h *Handler) RunAllocation(c *gin.Context) {
 		return
 	}
 
-	solution, err := h.allocator.OptimizeAllocation(c.Request.Context(), req.KarezID, req.TotalAvailableFlow)
+	solution, err := h.waterAllocator.OptimizeAllocation(c.Request.Context(), req.KarezID, req.TotalAvailableFlow)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -262,7 +268,7 @@ func (h *Handler) AcknowledgeAlert(c *gin.Context) {
 		return
 	}
 
-	if err := h.alertMgr.AcknowledgeAlert(c.Request.Context(), req.AlertID); err != nil {
+	if err := h.alarmManager.AcknowledgeAlert(c.Request.Context(), req.AlertID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -281,7 +287,7 @@ func (h *Handler) ResolveAlert(c *gin.Context) {
 		return
 	}
 
-	if err := h.alertMgr.ResolveAlert(c.Request.Context(), req.AlertID); err != nil {
+	if err := h.alarmManager.ResolveAlert(c.Request.Context(), req.AlertID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -296,7 +302,7 @@ func (h *Handler) CheckAlerts(c *gin.Context) {
 		return
 	}
 
-	if err := h.alertMgr.CheckAndAlert(c.Request.Context(), karezID); err != nil {
+	if err := h.alarmManager.CheckAndAlert(c.Request.Context(), karezID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -340,7 +346,7 @@ func (h *Handler) SimulateHydraulic(c *gin.Context) {
 		req.Temperature = 25.0
 	}
 
-	params := simulation.ChannelParams{
+	params := hydraulicsim.ChannelParams{
 		Width:                req.Width,
 		Height:               req.Height,
 		Slope:                req.Slope,
@@ -352,8 +358,8 @@ func (h *Handler) SimulateHydraulic(c *gin.Context) {
 		Temperature:          req.Temperature,
 	}
 
-	result := h.simulator.SimulateSegment(params, req.InflowRate)
-	sedimentationRisk := h.simulator.EstimateSedimentationRisk(result.FlowVelocity)
+	result := h.hydraulicSim.SimulateSegmentDirect(params, req.InflowRate)
+	sedimentationRisk := h.hydraulicSim.EstimateSedimentationRisk(result.FlowVelocity)
 
 	c.JSON(http.StatusOK, gin.H{
 		"inflow_rate":        result.InflowRate,

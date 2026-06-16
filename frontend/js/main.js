@@ -174,40 +174,9 @@ function showSegmentDetailModal(segment) {
 }
 
 function updateAllocationDisplay(oases, totalFlow) {
-    const container = document.getElementById('allocationList');
-    
-    if (!oases || oases.length === 0) {
-        container.innerHTML = '<div class="empty-state">暂无绿洲数据</div>';
-        return;
+    if (window.AllocationPanel) {
+        AllocationPanel.updateOases(oases, totalFlow);
     }
-
-    const totalDemand = oases.reduce((sum, o) => sum + o.daily_water_demand / 86400, 0);
-    
-    container.innerHTML = oases.map(oasis => {
-        const demand = oasis.daily_water_demand / 86400;
-        const allocRatio = totalDemand > 0 ? demand / totalDemand : 0;
-        const actualAlloc = totalFlow * allocRatio;
-        const demandMet = demand > 0 ? Math.min(1, actualAlloc / demand) : 0;
-        
-        const barColor = demandMet >= 0.9 ? '#4caf50' : 
-                         demandMet >= 0.7 ? '#ff9800' : '#f44336';
-        
-        return `
-            <div class="allocation-item">
-                <div class="alloc-header">
-                    <span class="alloc-name">${oasis.name}</span>
-                    <span class="alloc-value">${(allocRatio * 100).toFixed(1)}%</span>
-                </div>
-                <div class="allocation-bar">
-                    <div class="allocation-bar-fill" 
-                         style="width: ${demandMet * 100}%; background: ${barColor}"></div>
-                </div>
-                <div style="font-size: 11px; color: #78909c; margin-top: 4px;">
-                    需求: ${formatNumber(demand, 4)} m³/s | 优先级: ${oasis.priority}
-                </div>
-            </div>
-        `;
-    }).join('');
 }
 
 function updateAlerts(alerts) {
@@ -241,31 +210,9 @@ function getAlertTypeName(type) {
     return names[type] || type;
 }
 
-async function runOptimization() {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = '优化中...';
-    
-    try {
-        const totalFlow = parseFloat(document.getElementById('totalFlow').textContent) || 0.08;
-        
-        const result = await fetchAPI('/allocate', {
-            method: 'POST',
-            body: JSON.stringify({
-                karez_id: KAREZ_ID,
-                total_available_flow: totalFlow
-            })
-        });
-        
-        if (result && result.status === 'success') {
-            console.log('优化结果:', result);
-            loadDashboardData();
-        }
-    } catch (error) {
-        console.error('优化失败:', error);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '运行优化分配';
+function runOptimization() {
+    if (window.AllocationPanel) {
+        AllocationPanel.runOptimization();
     }
 }
 

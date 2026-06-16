@@ -1,0 +1,69 @@
+{
+  "default_channel": {
+    "width": 0.8,
+    "height": 1.2,
+    "slope": 0.002,
+    "roughness_coeff": 0.013,
+    "seepage_coeff": 0.0001,
+    "default_soil_type": "gravel",
+    "default_soil_correction": 1.0,
+    "default_temperature": 25.0
+  },
+  "soil_permeability": {
+    "gravel": {
+      "base_permeability": 0.0005,
+      "correction_factor": 1.8,
+      "description": "砾石层，渗透性极强"
+    },
+    "sandy_loam": {
+      "base_permeability": 0.00015,
+      "correction_factor": 1.2,
+      "description": "砂壤土，渗透性较强"
+    },
+    "sand": {
+      "base_permeability": 0.0003,
+      "correction_factor": 1.5,
+      "description": "砂土，渗透性强"
+    },
+    "silt": {
+      "base_permeability": 0.00006,
+      "correction_factor": 0.6,
+      "description": "粉土，渗透性中等"
+    },
+    "loess": {
+      "base_permeability": 0.00008,
+      "correction_factor": 0.7,
+      "description": "黄土，渗透性较弱"
+    },
+    "clay": {
+      "base_permeability": 0.00002,
+      "correction_factor": 0.3,
+      "description": "粘土，渗透性极弱"
+    },
+    "rock": {
+      "base_permeability": 0.00001,
+      "correction_factor": 0.15,
+      "description": "岩石，几乎不透水"
+    }
+  },
+  "sedimentation_thresholds": {
+    "low_risk_velocity": 0.8,
+    "medium_risk_velocity": 0.5,
+    "high_risk_velocity": 0.3,
+    "low_risk_score": 0.0,
+    "medium_risk_score": 0.3,
+    "high_risk_score": 0.6,
+    "critical_risk_score": 0.9
+  },
+  "evaporation": {
+    "base_rate": 0.005,
+    "temperature_coeff": 0.0002,
+    "wind_coeff": 0.0001
+  },
+  "simulation": {
+    "default_inflow_rate": 0.08,
+    "downstream_inflow_gain": 1.02,
+    "bisection_tolerance": 0.0001,
+    "max_iterations": 100
+  }
+}

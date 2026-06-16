@@ -1,0 +1,62 @@
+{
+  "crop_types": {
+    "grape": {
+      "name": "葡萄",
+      "water_requirement_m3_per_ha_per_day": 45.0,
+      "growing_season_start": "04-01",
+      "growing_season_end": "10-31",
+      "priority": 1
+    },
+    "cotton": {
+      "name": "棉花",
+      "water_requirement_m3_per_ha_per_day": 60.0,
+      "growing_season_start": "04-15",
+      "growing_season_end": "10-15",
+      "priority": 2
+    },
+    "wheat": {
+      "name": "小麦",
+      "water_requirement_m3_per_ha_per_day": 35.0,
+      "growing_season_start": "09-01",
+      "growing_season_end": "06-30",
+      "priority": 1
+    },
+    "corn": {
+      "name": "玉米",
+      "water_requirement_m3_per_ha_per_day": 55.0,
+      "growing_season_start": "05-01",
+      "growing_season_end": "09-30",
+      "priority": 2
+    },
+    "melon": {
+      "name": "哈密瓜",
+      "water_requirement_m3_per_ha_per_day": 40.0,
+      "growing_season_start": "05-15",
+      "growing_season_end": "09-15",
+      "priority": 3
+    },
+    "vegetable": {
+      "name": "蔬菜",
+      "water_requirement_m3_per_ha_per_day": 70.0,
+      "growing_season_start": "03-01",
+      "growing_season_end": "11-30",
+      "priority": 2
+    }
+  },
+  "oasis_defaults": {
+    "default_min_allocation_ratio": 0.3,
+    "default_max_allocation_ratio": 1.2,
+    "reserve_ratio": 0.1
+  },
+  "allocation_algorithm": {
+    "big_m_penalty": 1000.0,
+    "simplex_max_iterations": 1000,
+    "epsilon": 1e-9,
+    "priority_weight_base": 1.0
+  },
+  "water_shortage_levels": {
+    "warning_ratio": 0.8,
+    "critical_ratio": 0.5,
+    "emergency_ratio": 0.3
+  }
+}

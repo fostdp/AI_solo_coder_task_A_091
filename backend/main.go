@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
-	"karez-system/alert"
+	"karez-system/alarm_mqtt"
 	"karez-system/config"
 	"karez-system/db"
+	"karez-system/dtu_receiver"
 	"karez-system/handlers"
+	"karez-system/hydraulic_sim"
 	"karez-system/models"
 	"karez-system/mqtt"
-	"karez-system/optimization"
-	"karez-system/simulation"
+	"karez-system/water_allocator"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -37,39 +41,31 @@ func main() {
 		log.Println("MQTT connected successfully")
 	}
 
-	simulator := simulation.New(database)
-	allocator := optimization.New(database)
-	alertMgr := alert.New(database, mqttClient, simulator, allocator)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if mqttClient != nil {
-		err := mqttClient.SubscribeSensorData(func(msg *mqtt.SensorMessage) {
-			sensorData := &models.SensorData{
-				Time:            msg.Time,
-				KarezID:         msg.KarezID,
-				SegmentID:       msg.SegmentID,
-				ShaftID:         msg.ShaftID,
-				SensorType:      msg.SensorType,
-				SensorID:        msg.SensorID,
-				FlowRate:        msg.FlowRate,
-				WaterLevel:      msg.WaterLevel,
-				ShaftWaterLevel: msg.ShaftWaterLevel,
-				Evaporation:     msg.Evaporation,
-				Temperature:     msg.Temperature,
-				Turbidity:       msg.Turbidity,
-				Velocity:        msg.Velocity,
-			}
+	sensorDataChan := make(chan *models.SensorData, 100)
+	simRequestChan := make(chan hydraulicsim.SimRequest, 10)
+	simResultChan := make(chan hydraulicsim.SimResult, 20)
+	allocRequestChan := make(chan wateralloc.AllocationRequest, 10)
+	allocResultChan := make(chan wateralloc.AllocationResponse, 10)
+	alarmRequestChan := make(chan alarmmqtt.AlarmCheckRequest, 10)
 
-			ctx := context.Background()
-			if err := database.InsertSensorData(ctx, sensorData); err != nil {
-				log.Printf("Failed to insert sensor data from MQTT: %v", err)
-			}
-		})
-		if err != nil {
-			log.Printf("Warning: Failed to subscribe to sensor data: %v", err)
-		}
+	dtuReceiver := dtureceiver.New(cfg, database, mqttClient, sensorDataChan)
+	if err := dtuReceiver.Start(ctx); err != nil {
+		log.Printf("Warning: DTU receiver start failed: %v", err)
 	}
 
-	h := handlers.New(database, simulator, allocator, alertMgr)
+	hydraulicSim := hydraulicsim.New(cfg, database, simRequestChan, simResultChan)
+	hydraulicSim.Start(ctx)
+
+	waterAllocator := wateralloc.New(cfg, database, allocRequestChan, allocResultChan)
+	waterAllocator.Start(ctx)
+
+	alarmManager := alarmmqtt.New(cfg, database, mqttClient, alarmRequestChan)
+	alarmManager.Start(ctx)
+
+	h := handlers.New(database, dtuReceiver, hydraulicSim, waterAllocator, alarmManager)
 
 	r := gin.Default()
 
@@ -106,16 +102,28 @@ func main() {
 		api.POST("/alerts/resolve", h.ResolveAlert)
 	}
 
-	go startPeriodicTasks(database, simulator, alertMgr, cfg)
+	go startPeriodicTasks(cfg, simRequestChan, alarmRequestChan)
 
-	log.Printf("Server starting on port %s", cfg.ServerPort)
-	if err := r.Run(":" + cfg.ServerPort); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("Server starting on port %s", cfg.ServerPort)
+		if err := r.Run(":" + cfg.ServerPort); err != nil {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	sig := <-sigChan
+	log.Printf("Received signal %v, shutting down...", sig)
+	cancel()
+	time.Sleep(500 * time.Millisecond)
+	log.Println("Server stopped")
 }
 
-func startPeriodicTasks(database *db.Database, simulator *simulation.HydraulicSimulator,
-	alertMgr *alert.AlertManager, cfg *config.Config) {
+func startPeriodicTasks(cfg *config.Config,
+	simRequestChan chan<- hydraulicsim.SimRequest,
+	alarmRequestChan chan<- alarmmqtt.AlarmCheckRequest) {
 
 	simTicker := time.NewTicker(time.Duration(cfg.SimulationInterval) * time.Second)
 	alertTicker := time.NewTicker(time.Duration(cfg.AlertCheckInterval) * time.Second)
@@ -123,25 +131,20 @@ func startPeriodicTasks(database *db.Database, simulator *simulation.HydraulicSi
 	defer simTicker.Stop()
 	defer alertTicker.Stop()
 
-	ctx := context.Background()
-
 	for {
 		select {
 		case <-simTicker.C:
-			systems, err := database.GetKarezSystems(ctx)
-			if err != nil {
-				log.Printf("Error getting karez systems: %v", err)
-				continue
-			}
-			for _, sys := range systems {
-				if err := simulator.RunFullSimulation(ctx, sys.ID); err != nil {
-					log.Printf("Error running simulation for karez %d: %v", sys.ID, err)
-				}
+			select {
+			case simRequestChan <- hydraulicsim.SimRequest{KarezID: 1}:
+			default:
+				log.Println("Periodic sim: channel full, skipping")
 			}
 
 		case <-alertTicker.C:
-			if err := alertMgr.CheckAllKarez(ctx); err != nil {
-				log.Printf("Error checking alerts: %v", err)
+			select {
+			case alarmRequestChan <- alarmmqtt.AlarmCheckRequest{KarezID: 1}:
+			default:
+				log.Println("Periodic alarm: channel full, skipping")
 			}
 		}
 	}
